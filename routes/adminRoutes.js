@@ -29,4 +29,7 @@ router.get("/service/getSingle/:id",auth,checkRole("admin","super_admin"),servic
 router.patch("/service/update/:id",auth,checkRole("admin","super_admin"),serviceController.updateService);
 router.delete("/service/delete/:id",auth,checkRole("admin","super_admin"),serviceController.deleteService);
 
+//admin dashboard
+router.get("/dashboardStatics",auth,checkRole("admin","super_admin"),adminController.dashBoardStatics);
+
 export default router;
