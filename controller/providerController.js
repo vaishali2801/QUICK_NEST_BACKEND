@@ -7,6 +7,7 @@ import sendEmail from "../utils/sendEmail.js";
 import { getProviderRegistrationEmailTemplate } from "../services/emailTemplate.js";
 import Booking from "../model/Booking.js";
 import cloudinary from "../config/cloudinary.js";
+import auditLogger from "../utils/auditLogger.js";
 
 const registerAsProvider = async (req, res, next) => {
     try {
@@ -34,11 +35,14 @@ const registerAsProvider = async (req, res, next) => {
             });
         }
 
-        const { services, experience } = req.body;
+        let { services, experience } = req.body;
 
-        if (!services || !Array.isArray(services) || services.length === 0) {
-            return next(new HttpError("service required!!", 400));
+        if(typeof services === "string"){
+            services = services.split(",").map((id)=>id.replace(/"/g, "").trim());
         }
+        // if (!services || !Array.isArray(services) || services.length === 0) {
+        //     return next(new HttpError("service required!!", 400));
+        // }
 
         const validService = await Service.find({
             _id: { $in: services }
@@ -50,10 +54,10 @@ const registerAsProvider = async (req, res, next) => {
 
         const newProvider = new Provider({
             userId,
-            service: validService,
+            services,
             experience,
-            documents:req.file ? req.file.path : null,
-            cloudinary_id: req.file ? req.file.filename : null,
+            documents:req.files.map((file)=>file.path),
+            document_cloudinary_id: req.files?.[0]?.filename,
         });
         user.role = "provider";
         await newProvider.save();
@@ -184,11 +188,11 @@ const updateProvider = async (req, res, next) => {
         });
 
         if (req.file) {
-            if (provider.cloudinary_id) {
-                await cloudinary.uploader.destroy(provider.cloudinary_id);
+            if (provider.document_cloudinary_id) {
+                await cloudinary.uploader.destroy(provider.document_cloudinary_id);
             }
             provider.documents = req.file.path;
-            provider.cloudinary_id = req.file.filename;
+            provider.document_cloudinary_id = req.file.filename;
         }
 
         await provider.save();
@@ -216,11 +220,18 @@ const deleteProvider = async (req, res, next) => {
             req.user._id.toString() !== provider._id.toString()) {
             return next(new HttpError("access denied", 403));
         }
-        if (provider.cloudinary_id) {
-            await cloudinary.uploader.destroy(provider.cloudinary_id);
+        if (provider.document_cloudinary_id) {
+            await cloudinary.uploader.destroy(provider.document_cloudinary_id);
         }
         await provider.deleteOne();
-
+        await auditLogger({
+            action: "PROVIDER_DELETE",
+            performedBy: req.user._id,
+            module: provider.role,
+            targetedId: provider._id,
+            Ip: req.ip,
+            userAgent: req.get("User-Agent"),
+        });
         res.status(200).json({ success: true, message: "provider delete successfully!" })
     } catch (error) {
         next(new HttpError(error.message, 500));

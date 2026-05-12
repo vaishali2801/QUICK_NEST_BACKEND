@@ -1,10 +1,11 @@
-
+import path from "path";
+import crypto from "crypto";
 import HttpError from "../middleware/HttpError.js";
 import User from "../model/userModel.js";
 import cloudinary from "../config/cloudinary.js";
 import sendEmail from "../utils/sendEmail.js";
 import {getWelcomeEmailTemplate,  getForgotPasswordEmailTemplate} from "../services/emailTemplate.js";
-import crypto from "crypto";
+import auditLogger from "../utils/auditLogger.js";
 
 const addUser = async (req, res, next) => {
     try {
@@ -177,7 +178,14 @@ const deleteUser = async (req, res, next) => {
             await cloudinary.uploader.destroy(user.cloudinary_id);
         }
         await user.deleteOne();
-
+        await auditLogger({
+            action: "USER_DELETE",
+            performedBy: req.user._id,
+            module: user.role,
+            targetedId: user._id,
+            Ip: req.ip,
+            userAgent: req.get("User-Agent"),
+        });
         res.status(200).json({ success: true, message: "user delete successfully!" })
     } catch (error) {
         next(new HttpError(error.message, 500));

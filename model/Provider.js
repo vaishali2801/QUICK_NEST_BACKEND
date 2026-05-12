@@ -21,7 +21,7 @@ const providerSchema = new mongoose.Schema({
             type:String,
         }
     ],
-    cloudinary_id:{
+    document_cloudinary_id:{
         type:String,
     },
     isVerified:{
